@@ -503,6 +503,7 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
     desc.add_options()
       ("scene.name", boost::program_options::value<std::string>(), "Scene name")
       ("scene.runs", boost::program_options::value<std::string>()->default_value("1"), "Number of runs")
+      ("scene.trajectory_library", boost::program_options::value<std::string>()->default_value(""), "Trajectory Library storage directory")
       ("scene.timeout", boost::program_options::value<std::string>()->default_value(""), "Timeout for planning (s)")
       ("scene.start", boost::program_options::value<std::string>()->default_value(""), "Regex for the start states to use")
       ("scene.query", boost::program_options::value<std::string>()->default_value(".*"), "Regex for the queries to execute")
@@ -605,6 +606,8 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
 
     // Trajectory Library
     options_.trajectory_library = declared_options["scene.trajectory_library"];
+    if(!options_.trajectory_library.empty())
+      ROS_INFO("Trajectory Recording enabled. Saving to %s", (options_.trajectory_library).c_str());
 
     // Runs
     std::size_t default_run_count = 1;
@@ -891,10 +894,13 @@ void moveit_benchmarks::BenchmarkExecution::storeMessage(const T& message, const
   ser::OStream stream(buffer.get(), serial_size);
   ser::serialize(stream, message);
 
+  ROS_INFO("Serial Size = %d", serial_size);
+
   //write out to file
   std::ofstream file;
-  file.open(filepath.c_str());
-  file << buffer;
+  file.open(filepath.c_str(), std::ofstream::out | std::ofstream::binary);
+  for(uint8_t i=0; i<serial_size; ++i)
+    file << buffer[i];
   file.close();
 }
 
@@ -1138,12 +1144,14 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
             boost::filesystem::path scenefile("scene"+fileid);
             
             std::string request_filepath = (storagepath / requestfile).string();
-            std::string response_filepath = (storagepath / requestfile).string();
+            std::string response_filepath = (storagepath / responsefile).string();
             std::string scene_filepath = (storagepath / scenefile).string();
 
             storeMessage<moveit_msgs::MotionPlanRequest>(motion_plan_req, request_filepath);
-            storeMessage<moveit_msgs::MotionPlanDetailedResponse>(motion_plan_res, response_filepath);
-            storeMessage<moveit_msgs::PlanningScene>(req.scene, scene_filepath);
+            //storeMessage<moveit_msgs::MotionPlanDetailedResponse>(motion_plan_res, response_filepath);
+            //storeMessage<moveit_msgs::PlanningScene>(req.scene, scene_filepath);
+            
+            ROS_INFO("Saving plan #%d to %s", (int)result_plan_id, response_filepath.c_str());
 
             //record stored files in a lookup
             lookup_stream.open( (storagepath / lookupfile).string().c_str(), std::ofstream::out | std::ofstream::app );
