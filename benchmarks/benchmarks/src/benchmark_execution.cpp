@@ -50,6 +50,7 @@
 #include <boost/math/constants/constants.hpp>
 #include <boost/progress.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/filesystem.hpp>
 
 #include <eigen_conversions/eigen_msg.h>
 #include <Eigen/Core>
@@ -602,6 +603,9 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
 
     options_.plugins.clear();
 
+    // Trajectory Library
+    options_.trajectory_library = declared_options["scene.trajectory_library"];
+
     // Runs
     std::size_t default_run_count = 1;
     if (!declared_options["scene.runs"].empty())
@@ -878,6 +882,22 @@ bool isIKSolutionCollisionFree(const planning_scene::PlanningScene *scene,
 }
 }
 
+template <typename T>
+void moveit_benchmarks::BenchmarkExecution::storeMessage(const T& message, const std::string filepath)
+{
+  namespace ser = ros::serialization;
+  uint32_t serial_size = ser::serializationLength(message);
+  boost::shared_array<uint8_t> buffer(new uint8_t[serial_size]);
+  ser::OStream stream(buffer.get(), serial_size);
+  ser::serialize(stream, message);
+
+  //write out to file
+  std::ofstream file;
+  file.open(filepath.c_str());
+  file << buffer;
+  file.close();
+}
+
 void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkRequest &req)
 {
   /* Dev Notes:
@@ -1038,6 +1058,11 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
   std::vector<AlgorithmRunsData> data; // holds all of the results
   std::vector<bool> first_solution_flag(planner_interfaces_to_benchmark.size(), true);
 
+  size_t result_plan_id = 0;
+  boost::filesystem::path storagepath(options_.trajectory_library);
+  boost::filesystem::path lookupfile("path_lookup");
+  std::ofstream lookup_stream;
+
   // loop through the planning plugins
   for (std::size_t i = 0 ; i < planner_interfaces_to_benchmark.size() ; ++i)
   {
@@ -1096,6 +1121,36 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           if (solved && first_solution_flag[i])
           {
             first_solution_flag[i] = false;
+          }
+
+          //save the trajectory if we have a location to save it
+          //TODO use warehouse instead
+          if(!options_.trajectory_library.empty())
+          {
+            moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
+            mp_res.getMessage( motion_plan_res );
+
+            std::string fileid = boost::lexical_cast<std::string>(result_plan_id++);
+            
+            //storing files with unique names
+            boost::filesystem::path requestfile("res"+fileid);
+            boost::filesystem::path responsefile("req"+fileid);
+            boost::filesystem::path scenefile("scene"+fileid);
+            
+            std::string request_filepath = (storagepath / requestfile).string();
+            std::string response_filepath = (storagepath / requestfile).string();
+            std::string scene_filepath = (storagepath / scenefile).string();
+
+            storeMessage<moveit_msgs::MotionPlanRequest>(motion_plan_req, request_filepath);
+            storeMessage<moveit_msgs::MotionPlanDetailedResponse>(motion_plan_res, response_filepath);
+            storeMessage<moveit_msgs::PlanningScene>(req.scene, scene_filepath);
+
+            //record stored files in a lookup
+            lookup_stream.open( (storagepath / lookupfile).string().c_str(), std::ofstream::out | std::ofstream::app );
+            lookup_stream << request_filepath << ",";
+            lookup_stream << response_filepath << ",";
+            lookup_stream << scene_filepath << std::endl;
+            lookup_stream.close();
           }
         }
       }
