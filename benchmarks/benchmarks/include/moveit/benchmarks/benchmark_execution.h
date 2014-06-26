@@ -174,9 +174,6 @@ private:
    * @param param_instance - holds the generated parameter combinations, the result
    */
   void recursiveParamCombinations(int options_id, ParameterInstance param_instance);
-  
-  template<typename T>
-  void storeMessage(const T& message, std::string filepath);              
 
   /// Output to console the settings
   void printConfigurationSettings(const planning_interface::PlannerConfigurationMap &settings, std::ostream &out);

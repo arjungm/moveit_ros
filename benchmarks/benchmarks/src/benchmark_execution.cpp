@@ -885,25 +885,6 @@ bool isIKSolutionCollisionFree(const planning_scene::PlanningScene *scene,
 }
 }
 
-template <typename T>
-void moveit_benchmarks::BenchmarkExecution::storeMessage(const T& message, const std::string filepath)
-{
-  namespace ser = ros::serialization;
-  uint32_t serial_size = ser::serializationLength(message);
-  boost::shared_array<uint8_t> buffer(new uint8_t[serial_size]);
-  ser::OStream stream(buffer.get(), serial_size);
-  ser::serialize(stream, message);
-
-  ROS_INFO("Serial Size = %d", serial_size);
-
-  //write out to file
-  std::ofstream file;
-  file.open(filepath.c_str(), std::ofstream::out | std::ofstream::binary);
-  for(uint8_t i=0; i<serial_size; ++i)
-    file << buffer[i];
-  file.close();
-}
-
 void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkRequest &req)
 {
   /* Dev Notes:
@@ -1064,11 +1045,6 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
   std::vector<AlgorithmRunsData> data; // holds all of the results
   std::vector<bool> first_solution_flag(planner_interfaces_to_benchmark.size(), true);
 
-  size_t result_plan_id = 0;
-  boost::filesystem::path storagepath(options_.trajectory_library);
-  boost::filesystem::path lookupfile("path_lookup");
-  std::ofstream lookup_stream;
-
   // loop through the planning plugins
   for (std::size_t i = 0 ; i < planner_interfaces_to_benchmark.size() ; ++i)
   {
@@ -1130,41 +1106,45 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           }
 
           //save the trajectory if we have a location to save it
-          //TODO use warehouse instead
           if(!options_.trajectory_library.empty())
           {
             moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
             mp_res.getMessage( motion_plan_res );
-
-            std::string fileid = boost::lexical_cast<std::string>(result_plan_id++);
             
-            //storing files with unique names
-            boost::filesystem::path requestfile("res"+fileid);
-            boost::filesystem::path responsefile("req"+fileid);
-            boost::filesystem::path scenefile("scene"+fileid);
-            
-            std::string request_filepath = (storagepath / requestfile).string();
-            std::string response_filepath = (storagepath / responsefile).string();
-            std::string scene_filepath = (storagepath / scenefile).string();
+            //save to warehouse
+            std::vector<moveit_msgs::RobotTrajectory>::iterator traj_it = motion_plan_res.trajectory.begin();
+            for( ; traj_it!=motion_plan_res.trajectory.end(); ++traj_it)
+            {
+              pss_.addPlanningResult(motion_plan_req, *traj_it, options_.scene);
+            }
 
-            storeMessage<moveit_msgs::MotionPlanRequest>(motion_plan_req, request_filepath);
-            //storeMessage<moveit_msgs::MotionPlanDetailedResponse>(motion_plan_res, response_filepath);
-            //storeMessage<moveit_msgs::PlanningScene>(req.scene, scene_filepath);
-            
-            ROS_INFO("Saving plan #%d to %s", (int)result_plan_id, response_filepath.c_str());
+            std::vector<std::string> scene_names_;
+            std::vector<std::string> query_names_;
+            std::vector<moveit_warehouse::RobotTrajectoryWithMetadata> results_;
 
-            //record stored files in a lookup
-            lookup_stream.open( (storagepath / lookupfile).string().c_str(), std::ofstream::out | std::ofstream::app );
-            lookup_stream << request_filepath << ",";
-            lookup_stream << response_filepath << ",";
-            lookup_stream << scene_filepath << std::endl;
-            lookup_stream.close();
+            int num_queries=0, num_results=0;
+            
+            pss_.getPlanningSceneNames( scene_names_ );
+            std::vector<std::string>::iterator scene_;
+            for(scene_=scene_names_.begin(); scene_!=scene_names_.end(); ++scene_)
+            {
+              pss_.getPlanningQueriesNames( query_names_, *scene_ );
+
+              std::vector<std::string>::iterator query_=query_names_.begin();
+              num_queries+=query_names_.size();
+              for(;query_!=query_names_.end();++query_)
+              {
+                pss_.getPlanningResults(results_, *query_, *scene_);
+                num_results+=results_.size();
+              }
+            }
+            
+            ROS_INFO("Saved %d scenes, with %d queries, and %d results_", (int)scene_names_.size(), num_queries, num_results);
           }
         }
       }
       // this vector of runs represents all the runs*parameters
       data.push_back(runs);
-
     } // end j - planning algoritms
   } // end i - planning plugins
 
