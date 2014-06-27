@@ -1106,7 +1106,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           }
 
           //save the trajectory if we have a location to save it
-          if(!options_.trajectory_library.empty())
+          if(!options_.trajectory_library.empty()) //TODO change this so the option is just a flag
           {
             moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
             mp_res.getMessage( motion_plan_res );
@@ -1134,7 +1134,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
               num_queries+=query_names_.size();
               for(;query_!=query_names_.end();++query_)
               {
-                pss_.getPlanningResults(results_, *query_, *scene_);
+                pss_.getPlanningResults(results_, *scene_, *query_);
                 num_results+=results_.size();
               }
             }
