@@ -39,6 +39,7 @@
 #include <moveit/kinematic_constraints/utils.h>
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/robot_state/conversions.h>
+#include <moveit/trajectory_processing/iterative_time_parameterization.h>
 
 #include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
@@ -1110,11 +1111,25 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           {
             moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
             mp_res.getMessage( motion_plan_res );
+
+            trajectory_processing::IterativeParabolicTimeParameterization traj_retimer;
             
+            //make Robot Trajetory object
+            robot_trajectory::RobotTrajectory rt(planning_scene_->getRobotModel(), motion_plan_req.group_name);
+            moveit::core::RobotState rs(planning_scene_->getRobotModel());
+
             //save to warehouse
             std::vector<moveit_msgs::RobotTrajectory>::iterator traj_it = motion_plan_res.trajectory.begin();
             for( ; traj_it!=motion_plan_res.trajectory.end(); ++traj_it)
             {
+              //retime the trajectory
+              rs.setVariableValues(motion_plan_req.start_state.joint_state);
+              rt.setRobotTrajectoryMsg(rs, *traj_it);
+              bool success_retime = traj_retimer.computeTimeStamps(rt);
+              ROS_INFO("Retimed trajectory successfully: %s", success_retime ? "yes" : "no" );
+              rt.getRobotTrajectoryMsg(*traj_it);
+              
+              //store the trajectory
               pss_.addPlanningResult(motion_plan_req, *traj_it, options_.scene);
             }
 
