@@ -1118,7 +1118,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           }
 
           //save the trajectory if we have a location to save it
-          if(!options_.trajectory_library.empty()) //TODO change this so the option is just a flag
+          if(options_.record_flag) //TODO change this so the option is just a flag
           {
             moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
             mp_res.getMessage( motion_plan_res );
