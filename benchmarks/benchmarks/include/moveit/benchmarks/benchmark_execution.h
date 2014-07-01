@@ -119,7 +119,6 @@ private:
     std::size_t default_run_count;
     double offsets[6];
     double timeout;
-    bool record_flag;
 
     std::vector<PlanningPluginOptions> plugins;
 

@@ -39,7 +39,6 @@
 #include <moveit/kinematic_constraints/utils.h>
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/robot_state/conversions.h>
-#include <moveit/trajectory_processing/iterative_time_parameterization.h>
 
 #include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
@@ -51,7 +50,6 @@
 #include <boost/math/constants/constants.hpp>
 #include <boost/progress.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/filesystem.hpp>
 
 #include <eigen_conversions/eigen_msg.h>
 #include <Eigen/Core>
@@ -504,7 +502,6 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
     desc.add_options()
       ("scene.name", boost::program_options::value<std::string>(), "Scene name")
       ("scene.runs", boost::program_options::value<std::string>()->default_value("1"), "Number of runs")
-      ("scene.record", boost::program_options::value<std::string>()->default_value("false"), "Flag to store trajectories in warehouse")
       ("scene.timeout", boost::program_options::value<std::string>()->default_value(""), "Timeout for planning (s)")
       ("scene.start", boost::program_options::value<std::string>()->default_value(""), "Regex for the start states to use")
       ("scene.query", boost::program_options::value<std::string>()->default_value(".*"), "Regex for the queries to execute")
@@ -604,23 +601,6 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
       options_.output = filename;
 
     options_.plugins.clear();
-
-    // Trajectory recording
-    options_.record_flag = false;
-    if(!declared_options["scene.record"].empty())
-    {
-      try
-      {
-        options_.record_flag = boost::lexical_cast<bool>(declared_options["scene.record"]);
-      }
-      catch(boost::bad_lexical_cast &ex)
-      {
-        ROS_WARN("%s", ex.what());
-      }
-    }
-
-    if(options_.record_flag)
-      ROS_INFO("Trajectory Recording enabled. Saving to warehouse.");
 
     // Runs
     std::size_t default_run_count = 1;
@@ -1117,61 +1097,11 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           {
             first_solution_flag[i] = false;
           }
-
-          //save the trajectory if we have a location to save it
-          if(options_.record_flag)
-          {
-            moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
-            mp_res.getMessage( motion_plan_res );
-
-            trajectory_processing::IterativeParabolicTimeParameterization traj_retimer;
-            
-            //make Robot Trajetory object
-            robot_trajectory::RobotTrajectory rt(planning_scene_->getRobotModel(), motion_plan_req.group_name);
-            moveit::core::RobotState rs(planning_scene_->getRobotModel());
-
-            //save to warehouse
-            std::vector<moveit_msgs::RobotTrajectory>::iterator traj_it = motion_plan_res.trajectory.begin();
-            for( ; traj_it!=motion_plan_res.trajectory.end(); ++traj_it)
-            {
-              //retime the trajectory
-              rs.setVariableValues(motion_plan_req.start_state.joint_state);
-              rt.setRobotTrajectoryMsg(rs, *traj_it);
-              bool success_retime = traj_retimer.computeTimeStamps(rt);
-              ROS_INFO("Retimed trajectory successfully: %s", success_retime ? "yes" : "no" );
-              rt.getRobotTrajectoryMsg(*traj_it);
-              
-              //store the trajectory
-              pss_.addPlanningResult(motion_plan_req, *traj_it, options_.scene);
-            }
-
-            std::vector<std::string> scene_names_;
-            std::vector<std::string> query_names_;
-            std::vector<moveit_warehouse::RobotTrajectoryWithMetadata> results_;
-
-            int num_queries=0, num_results=0;
-            
-            pss_.getPlanningSceneNames( scene_names_ );
-            std::vector<std::string>::iterator scene_;
-            for(scene_=scene_names_.begin(); scene_!=scene_names_.end(); ++scene_)
-            {
-              pss_.getPlanningQueriesNames( query_names_, *scene_ );
-
-              std::vector<std::string>::iterator query_=query_names_.begin();
-              num_queries+=query_names_.size();
-              for(;query_!=query_names_.end();++query_)
-              {
-                pss_.getPlanningResults(results_, *scene_, *query_);
-                num_results+=results_.size();
-              }
-            }
-            
-            ROS_INFO("Saved %d scenes, with %d queries, and %d results_", (int)scene_names_.size(), num_queries, num_results);
-          }
         }
       }
       // this vector of runs represents all the runs*parameters
       data.push_back(runs);
+
     } // end j - planning algoritms
   } // end i - planning plugins
 
