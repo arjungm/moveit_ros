@@ -1118,28 +1118,15 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           }
 
           //save the trajectory if we have a location to save it
-          if(options_.record_flag) //TODO change this so the option is just a flag
+          if(options_.record_flag)
           {
             moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
             mp_res.getMessage( motion_plan_res );
-
-            trajectory_processing::IterativeParabolicTimeParameterization traj_retimer;
-            
-            //make Robot Trajetory object
-            robot_trajectory::RobotTrajectory rt(planning_scene_->getRobotModel(), motion_plan_req.group_name);
-            moveit::core::RobotState rs(planning_scene_->getRobotModel());
 
             //save to warehouse
             std::vector<moveit_msgs::RobotTrajectory>::iterator traj_it = motion_plan_res.trajectory.begin();
             for( ; traj_it!=motion_plan_res.trajectory.end(); ++traj_it)
             {
-              //retime the trajectory
-              rs.setVariableValues(motion_plan_req.start_state.joint_state);
-              rt.setRobotTrajectoryMsg(rs, *traj_it);
-              bool success_retime = traj_retimer.computeTimeStamps(rt);
-              ROS_INFO("Retimed trajectory successfully: %s", success_retime ? "yes" : "no" );
-              rt.getRobotTrajectoryMsg(*traj_it);
-              
               //store the trajectory
               pss_.addPlanningResult(motion_plan_req, *traj_it, options_.scene);
             }
