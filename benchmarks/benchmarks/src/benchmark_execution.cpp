@@ -1124,11 +1124,15 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
             mp_res.getMessage( motion_plan_res );
 
             //save to warehouse
-            std::vector<moveit_msgs::RobotTrajectory>::iterator traj_it = motion_plan_res.trajectory.begin();
-            for( ; traj_it!=motion_plan_res.trajectory.end(); ++traj_it)
+            moveit_msgs::MoveItErrorCodes result = motion_plan_res.error_code;
+            if(result.val==moveit_msgs::MoveItErrorCodes::SUCCESS)
             {
-              //store the trajectory
-              pss_.addPlanningResult(motion_plan_req, *traj_it, options_.scene);
+              std::vector<moveit_msgs::RobotTrajectory>::iterator traj_it = motion_plan_res.trajectory.begin();
+              for( ; traj_it!=motion_plan_res.trajectory.end(); ++traj_it)
+              {
+                //store the trajectory
+                pss_.addPlanningResult(motion_plan_req, *traj_it, options_.scene);
+              }
             }
 
             std::vector<std::string> scene_names_;
@@ -1136,7 +1140,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
             std::vector<moveit_warehouse::RobotTrajectoryWithMetadata> results_;
 
             int num_queries=0, num_results=0;
-            
+
             pss_.getPlanningSceneNames( scene_names_ );
             std::vector<std::string>::iterator scene_;
             for(scene_=scene_names_.begin(); scene_!=scene_names_.end(); ++scene_)
@@ -1151,7 +1155,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
                 num_results+=results_.size();
               }
             }
-            
+
             ROS_INFO("Saved %d scenes, with %d queries, and %d results_", (int)scene_names_.size(), num_queries, num_results);
           }
         }
