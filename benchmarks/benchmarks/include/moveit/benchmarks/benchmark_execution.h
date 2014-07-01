@@ -109,7 +109,6 @@ private:
   {
     std::string scene;
     std::string output;
-    std::string trajectory_library;
     std::string start_regex;
     std::string query_regex;
     std::string goal_regex;
@@ -120,6 +119,7 @@ private:
     std::size_t default_run_count;
     double offsets[6];
     double timeout;
+    bool record_flag;
 
     std::vector<PlanningPluginOptions> plugins;
 

@@ -504,7 +504,7 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
     desc.add_options()
       ("scene.name", boost::program_options::value<std::string>(), "Scene name")
       ("scene.runs", boost::program_options::value<std::string>()->default_value("1"), "Number of runs")
-      ("scene.trajectory_library", boost::program_options::value<std::string>()->default_value(""), "Trajectory Library storage directory")
+      ("scene.record", boost::program_options::value<std::string>()->default_value("false"), "Toggle trajectory storage in warehouse")
       ("scene.timeout", boost::program_options::value<std::string>()->default_value(""), "Timeout for planning (s)")
       ("scene.start", boost::program_options::value<std::string>()->default_value(""), "Regex for the start states to use")
       ("scene.query", boost::program_options::value<std::string>()->default_value(".*"), "Regex for the queries to execute")
@@ -606,9 +606,20 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
     options_.plugins.clear();
 
     // Trajectory Library
-    options_.trajectory_library = declared_options["scene.trajectory_library"];
-    if(!options_.trajectory_library.empty())
-      ROS_INFO("Trajectory Recording enabled. Saving to %s", (options_.trajectory_library).c_str());
+    options_.record_flag = false;
+    if(!declared_options["scene.record"].empty())
+    {
+      try
+      {
+        options_.record_flag = boost::lexical_cast<bool>(declared_options["scene.record"]);
+      }
+      catch(boost::bad_lexical_cast &ex)
+      {
+        ROS_WARN("%s", ex.what());
+      }
+    }
+    if(options_.record_flag)
+      ROS_INFO("Trajectory Recording enabled. Saving to warehouse.");
 
     // Runs
     std::size_t default_run_count = 1;
