@@ -39,7 +39,6 @@
 #include <moveit/kinematic_constraints/utils.h>
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/robot_state/conversions.h>
-#include <moveit/trajectory_processing/iterative_time_parameterization.h>
 
 #include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
@@ -615,6 +614,7 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
       }
       catch(boost::bad_lexical_cast &ex)
       {
+        ROS_WARN("Unable to parse %s as bool.", declared_options["scene.record"].c_str());
         ROS_WARN("%s", ex.what());
       }
     }
@@ -1120,21 +1120,128 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           //save the trajectory if we have a location to save it
           if(options_.record_flag)
           {
-            moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
-            mp_res.getMessage( motion_plan_res );
-
-            //save to warehouse
-            moveit_msgs::MoveItErrorCodes result = motion_plan_res.error_code;
-            if(result.val==moveit_msgs::MoveItErrorCodes::SUCCESS)
+            //check if collision free
+            for (std::size_t j = 0 ; j < mp_res.trajectory_.size() ; ++j)
             {
-              std::vector<moveit_msgs::RobotTrajectory>::iterator traj_it = motion_plan_res.trajectory.begin();
-              for( ; traj_it!=motion_plan_res.trajectory.end(); ++traj_it)
+              const robot_trajectory::RobotTrajectory &p = *mp_res.trajectory_[j];
+              bool correct = true;
+
+              // compute correctness and clearance
+              collision_detection::CollisionRequest req;
+              for (std::size_t k = 0 ; k < p.getWayPointCount() ; ++k)
               {
-                //store the trajectory
-                pss_.addPlanningResult(motion_plan_req, *traj_it, options_.scene);
+                collision_detection::CollisionResult res;
+                planning_scene_->checkCollisionUnpadded(req, res, p.getWayPoint(k));
+                if (res.collision)
+                  correct = false;
               }
+              if(correct)
+              {
+                ROS_INFO("Trajectory %d of %d (%s) is collision free", (int)j+1,  
+                    (int)mp_res.trajectory_.size(), 
+                    mp_res.description_[j].c_str());
+              }
+              else
+              {
+                ROS_WARN("Trajectory %d of %d (%s) is not collision free", (int)j+1,
+                    (int)mp_res.trajectory_.size(),
+                    mp_res.description_[j].c_str());
+              }
+              
+              //if it's the most processed trajectory and it is collision free set to success
+              if(correct && j==(mp_res.trajectory_.size()-1))
+                mp_res.error_code_.val = moveit_msgs::MoveItErrorCodes::SUCCESS;
+              else if(!correct && j==(mp_res.trajectory_.size()-1))
+                mp_res.error_code_.val = moveit_msgs::MoveItErrorCodes::FAILURE;
             }
 
+            //save to warehouse
+            moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
+            mp_res.getMessage( motion_plan_res );
+            if(mp_res.error_code_.val==moveit_msgs::MoveItErrorCodes::SUCCESS)
+            {
+              size_t last = motion_plan_res.trajectory.size()-1;
+              pss_.addPlanningResult(motion_plan_req, motion_plan_res.trajectory[last], options_.scene);
+            }
+            else
+            {
+              std::string err;
+              switch(mp_res.error_code_.val)
+              {
+                case moveit_msgs::MoveItErrorCodes::FAILURE:
+                  err="FAILURE";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::PLANNING_FAILED:
+                  err="PLANNING_FAILED";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::INVALID_MOTION_PLAN:
+                  err="INVALID_MOTION_PLAN";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::MOTION_PLAN_INVALIDATED_BY_ENVIRONMENT_CHANGE:
+                  err="MOTION_PLAN_INVALIDATED_BY_ENVIRONMENT_CHANGE";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::CONTROL_FAILED:
+                  err="CONTROL_FAILED";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::UNABLE_TO_AQUIRE_SENSOR_DATA:
+                  err="UNABLE_TO_AQUIRE_SENSOR_DATA";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::TIMED_OUT:
+                  err="TIMED_OUT";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::PREEMPTED:
+                  err="PREEMPTED";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::START_STATE_IN_COLLISION:
+                  err="START_STATE_IN_COLLISION";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::START_STATE_VIOLATES_PATH_CONSTRAINTS:
+                  err="START_STATE_VIOLATES_PATH_CONSTRAINTS";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::GOAL_IN_COLLISION:
+                  err="GOAL_IN_COLLISION";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::GOAL_VIOLATES_PATH_CONSTRAINTS:
+                  err="GOAL_VIOLATES_PATH_CONSTRAINTS";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::GOAL_CONSTRAINTS_VIOLATED:
+                  err="GOAL_CONSTRAINTS_VIOLATED";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::INVALID_GROUP_NAME:
+                  err="INVALID_GROUP_NAME";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::INVALID_GOAL_CONSTRAINTS:
+                  err="INVALID_GOAL_CONSTRAINTS";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::INVALID_ROBOT_STATE:
+                  err="INVALID_ROBOT_STATE";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::INVALID_LINK_NAME:
+                  err="INVALID_LINK_NAME";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::INVALID_OBJECT_NAME:
+                  err="INVALID_OBJECT_NAME";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::FRAME_TRANSFORM_FAILURE:
+                  err="FRAME_TRANSFORM_FAILURE";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::COLLISION_CHECKING_UNAVAILABLE:
+                  err="COLLISION_CHECKING_UNAVAILABLE";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::ROBOT_STATE_STALE:
+                  err="ROBOT_STATE_STALE";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::SENSOR_INFO_STALE:
+                  err="SENSOR_INFO_STALE";
+                  break;
+                case moveit_msgs::MoveItErrorCodes::NO_IK_SOLUTION:
+                  err="NO_IK_SOLUTION";
+                  break;
+              }
+              ROS_WARN("Invalid plan generated with error: %s", err.c_str());
+            }
+            
+            // status info about trajectory saving
             std::vector<std::string> scene_names_;
             std::vector<std::string> query_names_;
             std::vector<moveit_warehouse::RobotTrajectoryWithMetadata> results_;
