@@ -252,6 +252,9 @@ protected:
   // render the workspace box
   boost::scoped_ptr<rviz::Shape> workspace_box_;
 
+  // publisher for animation status
+  ros::Publisher anim_status_pub_;
+
   // the planning frame
   MotionPlanningFrame *frame_;
   QDockWidget *frame_dock_;

@@ -217,6 +217,8 @@ MotionPlanningDisplay::MotionPlanningDisplay() :
                            path_category_,
                            SLOT(changedShowTrail()), this);
 
+  anim_status_pub_ = node_handle_.advertise<std_msgs::Bool>("animation_status", 1);
+
   background_process_.setJobUpdateEvent(boost::bind(&MotionPlanningDisplay::backgroundJobUpdate, this, _1, _2));
 
   connect(this, SIGNAL(timeToShowNewTrail()), this, SLOT(changedShowTrail()));
@@ -1419,6 +1421,16 @@ void MotionPlanningDisplay::updateInternal(float wall_dt, float ros_dt)
       current_state_time_ = 0.0f;
     }
     current_state_time_ += wall_dt;
+
+    std_msgs::Bool anim_status;
+    anim_status.data = true;
+    anim_status_pub_.publish(anim_status);
+  }
+  else
+  {
+    std_msgs::Bool anim_status;
+    anim_status.data = false;
+    anim_status_pub_.publish(anim_status);
   }
 
   renderWorkspaceBox();
