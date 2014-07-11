@@ -116,6 +116,7 @@ private:
     std::string group_override;
     std::string planning_frame;
     std::string default_constrained_link;
+    std::string optimization_objective;
     std::size_t default_run_count;
     double offsets[6];
     double timeout;
