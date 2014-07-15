@@ -622,22 +622,6 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
     if(options_.record_flag)
       ROS_INFO("Trajectory Recording enabled. Saving to warehouse.");
 
-    // Trajectory Library
-    options_.optimization_objective = "PathLength";
-    if(!declared_options["scene.cost"].empty())
-    {
-      try
-      {
-        options_.optimization_objective = boost::lexical_cast<std::string>(declared_options["scene.cost"]);
-      }
-      catch(boost::bad_lexical_cast &ex)
-      {
-        ROS_WARN("Unable to parse %s as string.", declared_options["scene.cost"].c_str());
-        ROS_WARN("%s", ex.what());
-      }
-    }
-    ROS_INFO("Optimal planning will use %s objective", options_.optimization_objective.c_str());
-
     // Runs
     std::size_t default_run_count = 1;
     if (!declared_options["scene.runs"].empty())
@@ -1106,7 +1090,6 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
         planning_interface::PlanningContextPtr pcontext = planner_interfaces_to_benchmark[i]->getPlanningContext(planning_scene_, motion_plan_req);
 
         // set up the optimization object based on the config data
-        pcontext->setOptimizationObjective( options_.optimization_objective );
 
         // loop through the desired number of runs
         for (unsigned int run_count = 0 ; run_count < runs_per_planner_interface[i] ; ++run_count)
