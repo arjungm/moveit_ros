@@ -117,7 +117,6 @@ private:
     std::string planning_frame;
     std::string default_constrained_link;
     std::size_t default_run_count;
-    std::size_t retrials;
     double offsets[6];
     double timeout;
     bool record_flag;

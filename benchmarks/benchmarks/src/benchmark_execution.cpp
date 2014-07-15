@@ -504,7 +504,6 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
       ("scene.name", boost::program_options::value<std::string>(), "Scene name")
       ("scene.runs", boost::program_options::value<std::string>()->default_value("1"), "Number of runs")
       ("scene.record", boost::program_options::value<std::string>()->default_value("false"), "Toggle trajectory storage in warehouse")
-      ("scene.cost", boost::program_options::value<std::string>()->default_value("PathLength"), "Cost function to use in optimization based planners")
       ("scene.timeout", boost::program_options::value<std::string>()->default_value(""), "Timeout for planning (s)")
       ("scene.start", boost::program_options::value<std::string>()->default_value(""), "Regex for the start states to use")
       ("scene.query", boost::program_options::value<std::string>()->default_value(".*"), "Regex for the queries to execute")
