@@ -117,7 +117,6 @@ void parseLinkConstraint(std::istream &in, planning_scene_monitor::PlanningScene
       double x,y,z;
       in >> x >> y >> z;
       pos = Eigen::Translation3d(x,y,z);
-      break;
     }
     else if(type=="rpy")
     {
@@ -127,7 +126,6 @@ void parseLinkConstraint(std::istream &in, planning_scene_monitor::PlanningScene
       rot = Eigen::Quaterniond(Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX())
           * Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY())
           * Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()));
-      break;
     }
     else if(type=="quat")
     {
@@ -135,7 +133,6 @@ void parseLinkConstraint(std::istream &in, planning_scene_monitor::PlanningScene
       double x,y,z,w;
       in >> w >> x >> y >> z;
       rot = Eigen::Quaterniond(w,x,y,z);
-      break;
     }
     else
       ROS_ERROR("Unknown link constrain element: '%s'", type.c_str());
