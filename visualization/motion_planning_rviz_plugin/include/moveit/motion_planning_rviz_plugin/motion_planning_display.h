@@ -152,6 +152,7 @@ private Q_SLOTS:
   // Slot Event Functions
   // ******************************************************************************************
 
+  void changedUseTimingInfo();
   void changedDisplayPathVisualEnabled();
   void changedDisplayPathCollisionEnabled();
   void changedRobotPathAlpha();
@@ -301,6 +302,7 @@ protected:
   rviz::ColorProperty* query_colliding_link_color_property_;
   rviz::ColorProperty* query_outside_joint_limits_link_color_property_;
 
+  rviz::BoolProperty* display_path_with_timing_property_;
   rviz::BoolProperty* display_path_visual_enabled_property_;
   rviz::BoolProperty* display_path_collision_enabled_property_;
   rviz::EditableEnumProperty* state_display_time_property_;

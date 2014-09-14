@@ -207,6 +207,8 @@ MotionPlanningDisplay::MotionPlanningDisplay() :
   state_display_time_property_->addOptionStd("0.1 s");
   state_display_time_property_->addOptionStd("0.5 s");
 
+  display_path_with_timing_property_ = new rviz::BoolProperty("Use Timing Info", false, "Display trajectory with retiming information", use_timing_, SLOT(changedUseTimingInfo()), this);
+  
   loop_display_property_ =
     new rviz::BoolProperty("Loop Animation", false, "Indicates whether the last received path is to be animated in a loop",
                            path_category_,
@@ -1112,6 +1114,10 @@ void MotionPlanningDisplay::changedPlanningGroup()
   addBackgroundJob(boost::bind(&MotionPlanningDisplay::publishInteractiveMarkers, this, false), "publishInteractiveMarkers");
 }
 
+void MotionPlanningDisplay::changedUseTimingInfo()
+{
+}
+
 void MotionPlanningDisplay::changedWorkspace()
 {
   renderWorkspaceBox();
@@ -1428,26 +1434,66 @@ void MotionPlanningDisplay::updateInternal(float wall_dt, float ros_dt)
 
   if (animating_path_)
   {
-    float tm = getStateDisplayTime();
-    if (tm < 0.0) // if we should use realtime
-      tm = displaying_trajectory_message_->getWayPointDurationFromPrevious(current_state_ + 1);
-    if (current_state_time_ > tm)
+    if(!display_path_with_timing_property_->getBool())
     {
-      ++current_state_;
-      if ((std::size_t) current_state_ < displaying_trajectory_message_->getWayPointCount())
+      float tm = getStateDisplayTime();
+      if (tm < 0.0) // if we should use realtime
+        tm = displaying_trajectory_message_->getWayPointDurationFromPrevious(current_state_ + 1);
+      if (current_state_time_ > tm)
       {
-        display_path_robot_->update(displaying_trajectory_message_->getWayPointPtr(current_state_));
+        ++current_state_;
+        if ((std::size_t) current_state_ < displaying_trajectory_message_->getWayPointCount())
+        {
+          display_path_robot_->update(displaying_trajectory_message_->getWayPointPtr(current_state_));
+          for (std::size_t i = 0 ; i < trajectory_trail_.size() ; ++i)
+            trajectory_trail_[i]->setVisible(i <= current_state_);
+        }
+        else
+        {
+          animating_path_ = false;
+          display_path_robot_->setVisible(loop_display_property_->getBool());
+        }
+        current_state_time_ = 0.0f;
+      }
+      current_state_time_ += wall_dt;
+    }
+    else
+    {
+      size_t last_index = displaying_trajectory_message_->getWayPointCount()-1;
+      double last_durat = displaying_trajectory_message_->getWaypointDurationFromStart( last_index );
+      // check if just starting
+      if( current_state_time_ > last_durat )
+      {
+        current_state_ = 0;
+        current_state_time_ = 0.0f;
+      }
+      else
+      {
+        //visualize
+        robot_state::RobotStatePtr display_interp_state = boost::make_shared<robot_state::RobotState>( displaying_trajectory_message_->getRobotModel() );
+        bool result = displaying_trajectory_message_->getStateAtDurationFromStart( current_state_time_, display_interp_state );
+        if(!result)
+          ROS_WARN("Invalid state interpolated");
+        display_interp_state->update(true);
+        display_path_robot_->update( display_interp_state );
+
+        // update current_state index as time advances
+        while( current_state_time_ > displaying_trajectory_message_->getWaypointDurationFromStart( current_state_ ) )
+          ++current_state_;
+
+        // do the trail visualization up to the current state
         for (std::size_t i = 0 ; i < trajectory_trail_.size() ; ++i)
           trajectory_trail_[i]->setVisible(i <= current_state_);
       }
-      else
+      // incremenent state time
+      current_state_time_ +=wall_dt;
+      //if we're past the duration, stop animating
+      if( current_state_time_ > last_durat )
       {
         animating_path_ = false;
         display_path_robot_->setVisible(loop_display_property_->getBool());
       }
-      current_state_time_ = 0.0f;
     }
-    current_state_time_ += wall_dt;
   }
 
   renderWorkspaceBox();
