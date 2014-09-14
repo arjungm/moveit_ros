@@ -60,6 +60,7 @@
 #include <rviz/ogre_helpers/shape.h>
 
 #include <tf/transform_listener.h>
+#include <std_msgs/Bool.h>
 
 #include <moveit/robot_state/conversions.h>
 #include <moveit/trajectory_processing/trajectory_tools.h>
@@ -207,7 +208,8 @@ MotionPlanningDisplay::MotionPlanningDisplay() :
   state_display_time_property_->addOptionStd("0.1 s");
   state_display_time_property_->addOptionStd("0.5 s");
 
-  display_path_with_timing_property_ = new rviz::BoolProperty("Use Timing Info", false, "Display trajectory with retiming information", use_timing_, SLOT(changedUseTimingInfo()), this);
+  display_path_with_timing_property_ = new rviz::BoolProperty("Use Timing Info", false, "Display trajectory with retiming information", path_category_, SLOT(changedUseTimingInfo()), this);
+  animation_status_pub_ = node_handle_.advertise<std_msgs::Bool>("animation_status",1);
   
   loop_display_property_ =
     new rviz::BoolProperty("Loop Animation", false, "Indicates whether the last received path is to be animated in a loop",
@@ -1410,6 +1412,7 @@ void MotionPlanningDisplay::update(float wall_dt, float ros_dt)
 
 void MotionPlanningDisplay::updateInternal(float wall_dt, float ros_dt)
 {
+  std_msgs::Bool animation_status;
   PlanningSceneDisplay::updateInternal(wall_dt, ros_dt);
 
   if (!animating_path_ && !trajectory_message_to_display_ && loop_display_property_->getBool() && displaying_trajectory_message_)
@@ -1494,7 +1497,13 @@ void MotionPlanningDisplay::updateInternal(float wall_dt, float ros_dt)
         display_path_robot_->setVisible(loop_display_property_->getBool());
       }
     }
+    animation_status.data = true;
   }
+  else
+  {
+    animation_status.data = false;
+  }
+  animation_status_pub_.publish( animation_status );
 
   renderWorkspaceBox();
 }
