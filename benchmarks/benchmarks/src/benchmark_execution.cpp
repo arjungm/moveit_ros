@@ -278,6 +278,7 @@ void moveit_benchmarks::BenchmarkExecution::runAllBenchmarks(BenchmarkType type)
       if (got_robot_state)
       {
         start_state_to_use.reset(new moveit_msgs::RobotState(*robot_state));
+        req.start_name = state_name;
         ROS_INFO("Loaded start state '%s'", state_name.c_str());
       }
       else
@@ -1108,6 +1109,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
 
           // run a single benchmark
           ROS_DEBUG("Calling %s:%s", planner_interfaces_to_benchmark[i]->getDescription().c_str(), motion_plan_req.planner_id.c_str());
+          ROS_INFO("Start: %15s \t Goal: %15s", req.start_name.c_str(), req.goal_name.c_str());
           
           // attempt planning
           size_t trials_attempted = 1;
@@ -1117,6 +1119,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           planning_interface::MotionPlanDetailedResponse mp_res;
           moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
           size_t last;
+          moveit_msgs::MoveItErrorCodes last_error_code;
           while(!solution_found && trials_attempted < options_.max_num_trials)
           {
             planning_interface::MotionPlanDetailedResponse mp_res_trial;
@@ -1158,15 +1161,30 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
             else
             {
               ROS_WARN("MoveIt Error code = %d", mp_res_trial.error_code_.val);
+              last_error_code = mp_res_trial.error_code_;
             }
             ROS_INFO("%d attempts out of %d completed so far", trials_attempted++, options_.max_num_trials);
           }
 
           if(!solution_found)
+          {
+            // save to the debug file for later inspection
+            std::ofstream debug_file;
+            debug_file.open("/tmp/benchmark.dbg", std::ios::out | std::ios::app );
+            debug_file << boost::str(boost::format("Error:%4d\tGoal:%10s\tStart:%10s")
+                                                    % last_error_code.val
+                                                    % req.goal_name
+                                                    % req.start_name) << std::endl;
+            debug_file.close(); 
             ROS_WARN("Failed to find a valid solution. Ran out of trials.");
+          }
 
           if(options_.record_flag && solution_found)
+          {
             pss_.addPlanningResult(motion_plan_req, motion_plan_res.trajectory[last], options_.scene);
+            ROS_INFO("Adding trajectory to warehouse.");
+          }
+
 
           // collect data
           ros::WallTime start = ros::WallTime::now();

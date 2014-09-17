@@ -86,6 +86,7 @@ struct BenchmarkRequest
 
   // Optional: name of goal - only used for later analysis
   std::string goal_name;
+  std::string start_name;
 };
 
 class BenchmarkExecution
