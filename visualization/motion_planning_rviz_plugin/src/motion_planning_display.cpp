@@ -1434,7 +1434,7 @@ void MotionPlanningDisplay::updateInternal(float wall_dt, float ros_dt)
 
   if (animating_path_)
   {
-    if( display_path_with_timing_property_->getBool() )
+    if( !display_path_with_timing_property_->getBool() )
     {
       float tm = getStateDisplayTime();
       if (tm < 0.0) // if we should use realtime
@@ -1470,8 +1470,9 @@ void MotionPlanningDisplay::updateInternal(float wall_dt, float ros_dt)
       else
       {
         //visualize
-        robot_state::RobotStatePtr display_interp_state;
+        robot_state::RobotStatePtr display_interp_state = boost::make_shared<robot_state::RobotState>( displaying_trajectory_message_->getRobotModel() );
         displaying_trajectory_message_->getStateAtDurationFromStart( current_state_time_, display_interp_state );
+        display_interp_state->update();
         display_path_robot_->update( display_interp_state );
 
         // update current_state index as time advances
