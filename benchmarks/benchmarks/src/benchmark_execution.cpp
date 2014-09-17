@@ -504,6 +504,8 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
       ("scene.runs", boost::program_options::value<std::string>()->default_value("1"), "Number of runs")
       ("scene.timeout", boost::program_options::value<std::string>()->default_value(""), "Timeout for planning (s)")
       ("scene.start", boost::program_options::value<std::string>()->default_value(""), "Regex for the start states to use")
+      ("scene.record", boost::program_options::value<std::string>()->default_value("0"), "Flag for recording trajectories to warehouse")
+      ("scene.num_trials", boost::program_options::value<std::string>()->default_value("0"), "Number of failed planning attempts to tolerate before moving on to the next benchmark-run")
       ("scene.query", boost::program_options::value<std::string>()->default_value(".*"), "Regex for the queries to execute")
       ("scene.goal", boost::program_options::value<std::string>()->default_value(""), "Regex for the names of constraints to use as goals")
       ("scene.trajectory", boost::program_options::value<std::string>()->default_value(""), "Regex for the names of constraints to use as trajectories")
@@ -624,6 +626,33 @@ bool moveit_benchmarks::BenchmarkExecution::readOptions(const std::string &filen
       try
       {
         options_.timeout = boost::lexical_cast<double>(declared_options["scene.timeout"]);
+      }
+      catch(boost::bad_lexical_cast &ex)
+      {
+        ROS_WARN("%s", ex.what());
+      }
+    }
+
+    // Recording & Retrials
+    options_.record_flag = false;
+    options_.max_num_trials = 1;
+    if(!declared_options["scene.record"].empty())
+    {
+      try
+      {
+        int val = boost::lexical_cast<int>(declared_options["scene.record"]);
+        options_.record_flag = (val==1);
+      }
+      catch(boost::bad_lexical_cast &ex)
+      {
+        ROS_WARN("%s", ex.what());
+      }
+    }
+    if(!declared_options["scene.num_trials"].empty())
+    {
+      try
+      {
+        options_.max_num_trials = boost::lexical_cast<size_t>(declared_options["scene.num_trials"]);
       }
       catch(boost::bad_lexical_cast &ex)
       {
@@ -1079,13 +1108,68 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
 
           // run a single benchmark
           ROS_DEBUG("Calling %s:%s", planner_interfaces_to_benchmark[i]->getDescription().c_str(), motion_plan_req.planner_id.c_str());
+          
+          // attempt planning
+          size_t trials_attempted = 1;
+          bool solution_found = false;
+          bool solved; 
+          double total_time;
           planning_interface::MotionPlanDetailedResponse mp_res;
-          ros::WallTime start = ros::WallTime::now();
-          bool solved = pcontext->solve(mp_res);
-          double total_time = (ros::WallTime::now() - start).toSec();
+          moveit_msgs::MotionPlanDetailedResponse motion_plan_res;
+          size_t last;
+          while(!solution_found && trials_attempted < options_.max_num_trials)
+          {
+            planning_interface::MotionPlanDetailedResponse mp_res_trial;
+            ros::WallTime start = ros::WallTime::now();
+            solved = pcontext->solve(mp_res_trial);
+            total_time = (ros::WallTime::now() - start).toSec();
+            
+            mp_res_trial.getMessage( motion_plan_res );
+            
+            if(solved)
+            {
+              //check if valid
+              bool trajectory_is_collision_free = true;
+              last = motion_plan_res.trajectory.size()-1;
+              ROS_INFO("Collision checking trajectory (#%d, from \'%s\' step)", last+1, motion_plan_res.description[last].c_str());
+              // collision check
+              const robot_trajectory::RobotTrajectory &p = *mp_res_trial.trajectory_[last];
+              collision_detection::CollisionRequest req;
+              for (std::size_t k = 0 ; k < p.getWayPointCount() ; ++k)
+              {
+                collision_detection::CollisionResult res;
+                planning_scene_->checkCollisionUnpadded(req, res, p.getWayPoint(k));
+                if (res.collision)
+                  trajectory_is_collision_free = false;
+                if (!p.getWayPoint(k).satisfiesBounds())
+                  trajectory_is_collision_free = false;
+              }
+              if(trajectory_is_collision_free)
+              {
+                solution_found = true;
+                mp_res = mp_res_trial;
+                ROS_INFO("Trajectory is collision free and valid.");
+              }
+              else
+              {
+                ROS_INFO("Trajectory is not collision free and is invalid");
+              }
+            }
+            else
+            {
+              ROS_WARN("MoveIt Error code = %d", mp_res_trial.error_code_.val);
+            }
+            ROS_INFO("%d attempts out of %d completed so far", trials_attempted++, options_.max_num_trials);
+          }
+
+          if(!solution_found)
+            ROS_WARN("Failed to find a valid solution. Ran out of trials.");
+
+          if(options_.record_flag && solution_found)
+            pss_.addPlanningResult(motion_plan_req, motion_plan_res.trajectory[last], options_.scene);
 
           // collect data
-          start = ros::WallTime::now();
+          ros::WallTime start = ros::WallTime::now();
           runs[run_id].insert(parameter_data.begin(),parameter_data.end()); // initalize this run's data with the chosen parameters, if we have any
 
           collectMetrics(runs[run_id], mp_res, solved, total_time);
