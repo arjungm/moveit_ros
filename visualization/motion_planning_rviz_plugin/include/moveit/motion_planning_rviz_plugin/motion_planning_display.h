@@ -251,6 +251,7 @@ protected:
   std::vector<rviz::Robot*> trajectory_trail_;
   ros::Subscriber planning_group_sub_;
   ros::Subscriber trajectory_topic_sub_;
+  ros::Publisher animation_status_pub_;
   ros::NodeHandle private_handle_, node_handle_;
   bool animating_path_;
   int current_state_;

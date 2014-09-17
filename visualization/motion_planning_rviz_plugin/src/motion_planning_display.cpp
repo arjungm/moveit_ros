@@ -60,6 +60,7 @@
 #include <rviz/ogre_helpers/shape.h>
 
 #include <tf/transform_listener.h>
+#include <std_msgs/Bool.h>
 
 #include <moveit/robot_state/conversions.h>
 #include <moveit/trajectory_processing/trajectory_tools.h>
@@ -220,6 +221,8 @@ MotionPlanningDisplay::MotionPlanningDisplay() :
                            SLOT(changedShowTrail()), this);
 
   background_process_.setJobUpdateEvent(boost::bind(&MotionPlanningDisplay::backgroundJobUpdate, this, _1, _2));
+
+  animation_status_pub_ = node_handle_.advertise<std_msgs::Bool>("animation_status",1);
 
   connect(this, SIGNAL(timeToShowNewTrail()), this, SLOT(changedShowTrail()));
 }
@@ -1432,6 +1435,7 @@ void MotionPlanningDisplay::updateInternal(float wall_dt, float ros_dt)
     display_path_robot_->update(displaying_trajectory_message_->getFirstWayPointPtr());
   }
 
+  std_msgs::Bool animation_status_update;
   if (animating_path_)
   {
     if( !display_path_with_timing_property_->getBool() )
@@ -1492,7 +1496,13 @@ void MotionPlanningDisplay::updateInternal(float wall_dt, float ros_dt)
         display_path_robot_->setVisible(loop_display_property_->getBool());
       }
     }
+    animation_status_update.data=true;
   }
+  else
+  {
+    animation_status_update.data = false;
+  }
+  animation_status_pub_.publish( animation_status_update );
 
   renderWorkspaceBox();
 }
