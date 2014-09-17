@@ -111,25 +111,31 @@ void parseLinkConstraint(std::istream &in, planning_scene_monitor::PlanningScene
 
   while (type != "." && in.good() && !in.eof())
   {
-    if (type == "xyz")
+    if(type=="xyz")
     {
       have_position = true;
-      double x, y, z;
+      double x,y,z;
       in >> x >> y >> z;
-      pos = Eigen::Translation3d(x, y, z);
+      pos = Eigen::Translation3d(x,y,z);
+    }
+    else if(type=="rpy")
+    {
+      have_orientation = true;
+      double r, p, y;
+      in >> r >> p >> y;
+      rot = Eigen::Quaterniond(Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX())
+          * Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY())
+          * Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()));
+    }
+    else if(type=="quat")
+    {
+      have_orientation = true;
+      double x,y,z,w;
+      in >> w >> x >> y >> z;
+      rot = Eigen::Quaterniond(w,x,y,z);
     }
     else
-      if (type == "rpy")
-      {
-        have_orientation = true;
-        double r, p, y;
-        in >> r >> p >> y;
-        rot = Eigen::Quaterniond(Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX())
-                                 * Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY())
-                                 * Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()));
-      }
-      else
-        ROS_ERROR("Unknown link constraint element: '%s'", type.c_str());
+      ROS_ERROR("Unknown link constraint element: '%s'", type.c_str());
     in >> type;
   }
 
