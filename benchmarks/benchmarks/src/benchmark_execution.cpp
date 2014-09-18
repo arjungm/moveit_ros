@@ -1098,6 +1098,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
         }
 
         planning_interface::PlanningContextPtr pcontext = planner_interfaces_to_benchmark[i]->getPlanningContext(planning_scene_, motion_plan_req);
+        std::string last_request_name = "None";
 
         // loop through the desired number of runs
         for (unsigned int run_count = 0 ; run_count < runs_per_planner_interface[i] ; ++run_count)
@@ -1155,7 +1156,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
               }
               else
               {
-                ROS_INFO("Trajectory is not collision free and is invalid");
+                ROS_WARN("Trajectory is not collision free and is invalid");
               }
             }
             else
@@ -1166,23 +1167,36 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
             ROS_INFO("%d attempts out of %d completed so far", trials_attempted++, options_.max_num_trials);
           }
 
-          if(!solution_found)
+          if(options_.record_flag)
           {
-            // save to the debug file for later inspection
-            std::ofstream debug_file;
-            debug_file.open("/tmp/benchmark.dbg", std::ios::out | std::ios::app );
-            debug_file << boost::str(boost::format("Error:%4d\tGoal:%10s\tStart:%10s")
-                                                    % last_error_code.val
-                                                    % req.goal_name
-                                                    % req.start_name) << std::endl;
-            debug_file.close(); 
-            ROS_WARN("Failed to find a valid solution. Ran out of trials.");
-          }
-
-          if(options_.record_flag && solution_found)
-          {
-            pss_.addPlanningResult(motion_plan_req, motion_plan_res.trajectory[last], options_.scene);
-            ROS_INFO("Adding trajectory to warehouse.");
+            if(!solution_found)
+            {
+              // save to the debug file for later inspection
+              std::ofstream debug_file;
+              std::string debug_name = boost::str(boost::format("/tmp/%s.benchmark.dbg") % options_.scene);
+              debug_file.open(debug_name.c_str(), std::ios::out | std::ios::app );
+              debug_file << boost::str(boost::format("%4d %10s %10s %20s %20s")
+                  % last_error_code.val
+                  % req.start_name
+                  % req.goal_name
+                  % motion_plan_req.planner_id
+                  % last_request_name ) << std::endl;
+              debug_file.close(); 
+              ROS_ERROR("[FAILURE] Failed to find a valid solution. Ran out of trials.");
+            }
+            else
+            {
+              pss_.addPlanningResult(motion_plan_req, motion_plan_res.trajectory[last], options_.scene);
+              ROS_INFO("Adding trajectory to warehouse.");
+              // get last motion planning request name - for debug
+              std::vector<std::string> query_names;
+              pss_.getPlanningQueriesNames( query_names, options_.scene );
+              if( query_names.empty() )
+                last_request_name = "None";
+              else
+                last_request_name = query_names.at(query_names.size()-1);
+              ROS_ERROR("[SUCCESS] Created plan from %s to %s with %s",req.start_name.c_str(), req.goal_name.c_str(), motion_plan_req.planner_id.c_str());
+            }
           }
 
 
@@ -1199,7 +1213,7 @@ void moveit_benchmarks::BenchmarkExecution::runPlanningBenchmark(BenchmarkReques
           {
             first_solution_flag[i] = false;
           }
-        }
+        } // end loop on runs
       }
       // this vector of runs represents all the runs*parameters
       data.push_back(runs);
